@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Adstr Stage Sync — Route 3 (Notion API automation) + diagnostics."""
+"""Adstr Stage Sync — Route 3 (Notion API automation)."""
 
 import os, re, sys, time, requests
 
@@ -34,15 +34,26 @@ CLIENT_IDS = {
 }
 
 CLIENT_MAP = [
-    ("Ninja FS605 SLUSHi MAX","Round 22","Ninja","FS605 Slushi Max","Ninja","🥷 Ninja"),
-    ("Tao Clean","Round 1","Tao Clean",None,"Tao Clean","🦷 Tao Clean"),
-    ("Nu Harvest","Round 1","Nu Harvest",None,"Nu Harvest","🎀 Nu Harvest"),
-    ("Frase Skin","Round 10","Frase Skin",None,"Frase Skin","👷 Frase Skin"),
-    ("PuraU","Round 4","PuraU",None,"PuraU","💊 PuraU"),
-    ("Whif","Round 4","Whif",None,"WHIF","👃 Whif"),
-    ("Hyro","Round 3","Hyro",None,"Hyro","⚡ Hyro"),
-    ("Healr","Round 5","Healr",None,"Healr","🟠 Healr"),
-    ("SoleBrace","Round 2","SoleBrace",None,"SoleBrace","🦶 SoleBrace"),
+    ("Ninja FS605 SLUSHi MAX",        "Round 22",  "Ninja",      "FS605 Slushi Max", "Ninja",     "🥷 Ninja"),
+    ("Ninja FS302 PKANZ SLUSHi Pink", "Round 22",  "Ninja",      "FS302",            "Ninja",     "🥷 Ninja"),
+    ("Ninja FN101PKANZ CRISPi Pink",  "Round 22",  "Ninja",      "FN101",            "Ninja",     "🥷 Ninja"),
+    ("Ninja NC302 CREAMi Pink",       "Round 22",  "Ninja",      "NC302",            "Ninja",     "🥷 Ninja"),
+    ("Ninja AS101 CRISPi Pro",        "Round 23",  "Ninja",      "AS101",            "Ninja",     "🥷 Ninja"),
+    ("Ninja DB351 BlendBOSS",         "Round 23",  "Ninja",      "DB351",            "Ninja",     "🥷 Ninja"),
+    ("Ninja ES601 Luxe Cafe",         "Round 23",  "Ninja",      "ES601",            "Ninja",     "🥷 Ninja"),
+    ("Ninja NC501 Creami",            "Round 23",  "Ninja",      "NC501",            "Ninja",     "🥷 Ninja"),
+    ("Ninja NC300 CREAMi",            "Round 24",  "Ninja",      "NC300",            "Ninja",     "🥷 Ninja"),
+    ("Tao Clean",                     "Round 1",   "Tao Clean",  None,               "Tao Clean", "🦷 Tao Clean"),
+    ("Tao Clean",                     "Round 2",   "Tao Clean",  None,               "Tao Clean", "🦷 Tao Clean"),
+    ("Nu Harvest",                    "Round 1",   "Nu Harvest", None,               "Nu Harvest","🎀 Nu Harvest"),
+    ("SoleBrace",                     "Round 2",   "SoleBrace",  None,               "SoleBrace", "🦶 SoleBrace"),
+    ("Frase Skin",                    "Round 10",  "Frase Skin", None,               "Frase Skin","👷 Frase Skin"),
+    ("PuraU",                         "Round 4",   "PuraU",      None,               "PuraU",     "💊 PuraU"),
+    ("PuraU",                         "Round 5",   "PuraU",      None,               "PuraU",     "💊 PuraU"),
+    ("Whif",                          "Round 4",   "Whif",       None,               "WHIF",      "👃 Whif"),
+    ("Whif",                          "Round 5",   "Whif",       None,               "WHIF",      "👃 Whif"),
+    ("Hyro",                          "Round 3",   "Hyro",       None,               "Hyro",      "⚡ Hyro"),
+    ("Healr",                         "Round 5",   "Healr",      None,               "Healr",     "🟠 Healr"),
 ]
 
 CS_TO_STAGE = {"Reached Out [WhatsApp]":"🔒 Locking in creator","Reached Out [Email]":"🔒 Locking in creator",
@@ -88,11 +99,6 @@ def ptxt(p):
     if t=="url":          return p.get("url") or ""
     return ""
 
-def rel_ids(p):
-    if p and p.get("type")=="relation":
-        return {r["id"].replace("-","") for r in p["relation"]}
-    return set()
-
 _CACHE={}
 def relation_first_title(p):
     try:
@@ -111,106 +117,5 @@ def cnum_job(s):
 def cnum_master(s):
     m=re.search(r"(\d+)",s or ""); return int(m.group(1)) if m else None
 
-_DBG=[True]
 def records_for(client_id, product, round_name, flow_client):
-    master=query_db(DB_MASTER, {"property":M_ROUND,"select":{"equals":round_name}})
-    concepts={}
-    cid=(client_id or "").replace("-","")
-    if _DBG[0] and master:
-        _DBG[0]=False
-        p0=master[0]["properties"]
-        print("DBG keys:",list(p0.keys()))
-        print("DBG client_field:",p0.get(M_CLIENT_REL))
-        print("DBG looking_for_id:",cid)
-    for row in master:
-        pr=row["properties"]
-        if cid and cid not in rel_ids(pr.get(M_CLIENT_REL)): continue
-        if product and product.lower() not in ptxt(pr.get(M_PRODUCT)).lower(): continue
-        n=cnum_master(ptxt(pr.get(M_CONCEPT_NO)))
-        if n is None: continue
-        concepts[n]={"cs":ptxt(pr.get(M_CS_STATUS)),"type":ptxt(pr.get(M_TYPE)),
-                     "name":ptxt(pr.get(M_CONCEPT_NM)) or ptxt(pr.get(M_CONCEPT_NO)),
-                     "creator":relation_first_title(pr.get(M_CREATOR)),"pid":row["id"]}
-    paid=[]
-    for n in sorted(concepts):
-        if concepts[n]["type"].strip().upper().startswith("UGC"): paid.append(n)
-        elif "STATIC" in concepts[n]["type"].upper(): break
-    paid=set(paid)
-    flow={}
-    try:
-        for row in query_db(DB_FLOW, {"and":[{"property":F_ROUND,"select":{"equals":round_name}},
-                                             {"property":F_CLIENT,"select":{"equals":flow_client}}]}):
-            pr=row["properties"]
-            if "video" not in ptxt(pr.get(F_FORMAT)).lower(): continue
-            n=cnum_job(ptxt(pr.get(F_JOBNAME)))
-            if n is not None:
-                flow[n]={"status":ptxt(pr.get(F_STATUS)),"script":ptxt(pr.get(F_SCRIPT)),"review":ptxt(pr.get(F_REVIEW))}
-    except requests.HTTPError: pass
-    out={}
-    for n in sorted(paid):
-        cs=concepts[n]["cs"]; f=flow.get(n,{}); fs=f.get("status")
-        if fs and fs in FLOW_TO_STAGE: stage=FLOW_TO_STAGE[fs]
-        elif cs in CS_TO_STAGE:        stage=CS_TO_STAGE[cs]
-        elif cs=="Failed":             stage="❌ Failed"
-        else:                          stage="⚪ no status yet"
-        out[n]={"name":concepts[n]["name"],"creator":concepts[n]["creator"],"stage":stage,
-                "edit":FLOW_TO_EDIT.get(fs,""),"script":f.get("script",""),"review":f.get("review",""),"pid":concepts[n]["pid"]}
-    return out
-
-def set_master_stage(pid, stage):
-    if stage.startswith(("⚪","❌")): return
-    _patch(f"/pages/{pid}", {"properties":{M_STAGE:{"select":{"name":stage}}}})
-
-def upsert_concept(client_lbl, round_name, n, rec, sku=""):
-    title=rec["name"] or f"{client_lbl} {round_name} C{n}"
-    props={C_CONCEPT:{"title":[{"type":"text","text":{"content":f"C{n} — {title}"}}]},
-        C_CLIENT:{"select":{"name":client_lbl}},C_ROUND:{"select":{"name":round_name}},
-        C_NUM:{"rich_text":[{"type":"text","text":{"content":f"C{n}"}}]},C_FORMAT:{"select":{"name":"UGC"}},
-        C_SKU:{"rich_text":[{"type":"text","text":{"content":sku}}]} if sku else {"rich_text":[]}}
-    if rec["creator"]: props[C_CREATOR]={"rich_text":[{"type":"text","text":{"content":rec["creator"]}}]}
-    if not rec["stage"].startswith(("⚪","❌")): props[C_STAGE]={"select":{"name":rec["stage"]}}
-    if rec["edit"]:   props[C_EDIT]={"select":{"name":rec["edit"]}}
-    if rec["script"]: props[C_SCRIPT]={"url":rec["script"]}
-    if rec["review"]: props[C_REVIEW]={"url":rec["review"]}
-    keyflt=[{"property":C_CLIENT,"select":{"equals":client_lbl}},{"property":C_ROUND,"select":{"equals":round_name}},
-            {"property":C_NUM,"rich_text":{"equals":f"C{n}"}},
-            {"property":C_SKU,"rich_text":{"equals":sku}} if sku else {"property":C_SKU,"rich_text":{"is_empty":True}}]
-    found=query_db(DB_CONCEPT, {"and":keyflt})
-    if found: _patch(f"/pages/{found[0]['id']}", {"properties":props})
-    else:     _post("/pages", {"parent":{"database_id":DB_CONCEPT},"properties":props})
-
-def update_tracker(pid, recs, existing):
-    lines=["📋 Concept status (auto-synced)"]; exported=0
-    for n in sorted(recs):
-        st=recs[n]["stage"]; emo=EMOJI.get(st,"•"); word=st.split(" ",1)[1] if " " in st else st
-        lines.append(f"C{n}: {emo} {word}")
-        if st=="🏁 Exported": exported+=1
-    total=len(recs); pct=round(100*exported/total) if total else 0
-    human=existing.split(SEP,1)[1].strip() if SEP in existing else existing.strip()
-    notes=("\n".join(lines)+f"\n{SEP}\n"+human)[:1900]
-    _patch(f"/pages/{pid}", {"properties":{T_NOTES:{"rich_text":[{"type":"text","text":{"content":notes}}]},
-        T_COMPLETION:{"rich_text":[{"type":"text","text":{"content":f"{exported}/{total} exported ({pct}%)"}}]}}})
-
-def tracker_page(client, round_name):
-    rows=query_db(DB_TRACKER, {"and":[{"property":T_CLIENT,"title":{"equals":client}},
-                                      {"property":T_ROUND,"status":{"equals":round_name}}]})
-    return rows[0] if rows else None
-
-def main():
-    if not NOTION_TOKEN: sys.exit("Set NOTION_TOKEN first.")
-    for client,round_name,brand,product,flow_client,lbl in CLIENT_MAP:
-        try:
-            recs=records_for(CLIENT_IDS.get(brand,""),product,round_name,flow_client)
-            if not recs:
-                print(f"WARN  {client} {round_name}: no concepts found"); continue
-            for n,rec in recs.items():
-                set_master_stage(rec["pid"],rec["stage"])
-                upsert_concept(lbl,round_name,n,rec,sku=(product or ""))
-            page=tracker_page(client,round_name)
-            if page: update_tracker(page["id"],recs,ptxt(page["properties"].get(T_NOTES)))
-            print(f"OK  {client} {round_name}: {len(recs)} concepts")
-        except Exception as e:
-            print(f"ERROR  {client} {round_name}: {e}")
-
-if __name__=="__main__":
-    main()
+    flt={"and":[{"property":M_ROUND,"select
