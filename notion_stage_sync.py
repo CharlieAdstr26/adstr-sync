@@ -1,53 +1,30 @@
 #!/usr/bin/env python3
-"""
-Adstr Stage Sync  —  Route 3 (proper Notion API automation)
-"""
+"""Adstr Stage Sync — Route 3 (Notion API automation)."""
 
 import os, re, sys, time, requests
 
-# 1. CONNECTION
 NOTION_TOKEN = os.environ.get("NOTION_TOKEN")
-HEADERS = {
-    "Authorization": f"Bearer {NOTION_TOKEN}",
-    "Notion-Version": "2022-06-28",
-    "Content-Type": "application/json",
-}
+HEADERS = {"Authorization": f"Bearer {NOTION_TOKEN}", "Notion-Version": "2022-06-28", "Content-Type": "application/json"}
 API = "https://api.notion.com/v1"
 
-# 2. DATABASE IDs
-DB_MASTER  = "37044225-6652-8133-84e3-e044fbf22942"   # Master Creative Database
-DB_FLOW    = "37044225-6652-8188-8496-c3945046d0ea"   # Adstr Flow (Hub)
-DB_TRACKER = "06a44225-6652-83ac-94d2-015afef1b629"   # Progress Tracker -> Clients
-DB_CONCEPT = "f6a176a3-e058-4c94-8d39-8c42d5b9a41c"   # Concept Tracker
+DB_MASTER  = "37044225-6652-8133-84e3-e044fbf22942"
+DB_FLOW    = "37044225-6652-8188-8496-c3945046d0ea"
+DB_TRACKER = "06a44225-6652-83ac-94d2-015afef1b629"
+DB_CONCEPT = "f6a176a3-e058-4c94-8d39-8c42d5b9a41c"
 
-# 3. PROPERTY NAMES
-M_CONCEPT_NO = "Concept No. "
-M_CONCEPT_NM = "Concept Name"
-M_ROUND      = "Official Round"
-M_TYPE       = "Type"
-M_PRODUCT    = "Product"
-M_CREATOR    = "Creator(s)"
-M_CS_STATUS  = "CS Status"
-M_STAGE      = "🎯 Stage"
+M_CONCEPT_NO="Concept No. "; M_CONCEPT_NM="Concept Name"; M_ROUND="Official Round"
+M_TYPE="Type"; M_PRODUCT="Product"; M_CLIENT_REL="Current Clients"; M_CREATOR="Creator(s)"
+M_CS_STATUS="CS Status"; M_STAGE="🎯 Stage"
 
-F_JOBNAME    = "Job#_Name"
-F_ROUND      = "Offical Round"
-F_CLIENT     = "Client"
-F_FORMAT     = "Format"
-F_STATUS     = "Status"
-F_SCRIPT     = "Script Link"
-F_REVIEW     = "Review Link"
+F_JOBNAME="Job#_Name"; F_ROUND="Offical Round"; F_CLIENT="Client"
+F_FORMAT="Format"; F_STATUS="Status"; F_SCRIPT="Script Link"; F_REVIEW="Review Link"
 
-T_CLIENT     = "Client"
-T_ROUND      = "Round "
-T_NOTES      = "📝 Notes"
-T_COMPLETION = "🏁 Round Completion"
+T_CLIENT="Client"; T_ROUND="Round "; T_NOTES="📝 Notes"; T_COMPLETION="🏁 Round Completion"
 
-C_CONCEPT  = "Concept"; C_CLIENT="Client"; C_ROUND="Round"; C_NUM="Concept #"
-C_CREATOR  = "Creator"; C_STAGE="🎯 Stage"; C_EDIT="✂️ Editing Status"
-C_FORMAT   = "Format";  C_SCRIPT="Script Link"; C_REVIEW="Review Link"
+C_CONCEPT="Concept"; C_CLIENT="Client"; C_ROUND="Round"; C_NUM="Concept #"; C_SKU="SKU"
+C_CREATOR="Creator"; C_STAGE="🎯 Stage"; C_EDIT="✂️ Editing Status"
+C_FORMAT="Format"; C_SCRIPT="Script Link"; C_REVIEW="Review Link"
 
-# 4. WHICH ROWS TO SYNC
 CLIENT_MAP = [
     ("Ninja FS605 SLUSHi MAX",        "Round 22",  "Ninja",      "FS605 Slushi Max", "Ninja",     "🥷 Ninja"),
     ("Ninja FS302 PKANZ SLUSHi Pink", "Round 22",  "Ninja",      "FS302",            "Ninja",     "🥷 Ninja"),
@@ -71,58 +48,41 @@ CLIENT_MAP = [
     ("Healr",                         "Round 5",   "Healr",      None,               "Healr",     "🟠 Healr"),
 ]
 
-# 5. STATUS -> STAGE MAPPING
 CS_TO_STAGE = {
-    "Reached Out [WhatsApp]": "🔒 Locking in creator",
-    "Reached Out [Email]":    "🔒 Locking in creator",
-    "In Talks - Keen":        "🔒 Locking in creator",
-    "Signing Contract":       "🔒 Locking in creator",
-    "Agreed":                 "🔒 Locking in creator",
-    "Ordered Product":        "📦 Product sent",
-    "Filming":                "🎬 Filming",
-    "REVISIONS":              "🔄 Creator revisions",
-    "Reviewing":              "🎞️ In editing",
-    "FLOW":                   "🎞️ In editing",
-    "COMPLETE":               "🏁 Exported",
+    "Reached Out [WhatsApp]":"🔒 Locking in creator","Reached Out [Email]":"🔒 Locking in creator",
+    "In Talks - Keen":"🔒 Locking in creator","Signing Contract":"🔒 Locking in creator","Agreed":"🔒 Locking in creator",
+    "Ordered Product":"📦 Product sent","Filming":"🎬 Filming","REVISIONS":"🔄 Creator revisions",
+    "Reviewing":"🎞️ In editing","FLOW":"🎞️ In editing","COMPLETE":"🏁 Exported",
 }
 FLOW_TO_STAGE = {
-    "Update Status":"🎞️ In editing","Awaiting Assets":"🎞️ In editing",
-    "Ready to Edit":"🎞️ In editing","In Editing":"🎞️ In editing",
-    "Internal Review":"🎞️ In editing","Ready For Review":"🎞️ In editing",
-    "Notes given":"✂️ Editing revisions","Revisions":"✂️ Editing revisions",
-    "Revisions Amended":"✂️ Editing revisions","Need End Cards":"✂️ Editing revisions",
-    "Need 4x5 version":"✂️ Editing revisions",
-    "Pending Approval":"✅ Approved internally","4x5s Approved":"✅ Approved internally",
-    "Client Review":"✅ Approved internally",
-    "Pending Export":"📤 Pending export","Pending Exports":"📤 Pending export",
-    "Exported":"🏁 Exported",
+    "Update Status":"🎞️ In editing","Awaiting Assets":"🎞️ In editing","Ready to Edit":"🎞️ In editing",
+    "In Editing":"🎞️ In editing","Internal Review":"🎞️ In editing","Ready For Review":"🎞️ In editing",
+    "Notes given":"✂️ Editing revisions","Revisions":"✂️ Editing revisions","Revisions Amended":"✂️ Editing revisions",
+    "Need End Cards":"✂️ Editing revisions","Need 4x5 version":"✂️ Editing revisions",
+    "Pending Approval":"✅ Approved internally","4x5s Approved":"✅ Approved internally","Client Review":"✅ Approved internally",
+    "Pending Export":"📤 Pending export","Pending Exports":"📤 Pending export","Exported":"🏁 Exported",
 }
 FLOW_TO_EDIT = {
     "Ready to Edit":"Ready to Edit","Update Status":"Ready to Edit","Awaiting Assets":"Ready to Edit",
-    "In Editing":"In Editing","Internal Review":"In Editing",
-    "Ready For Review":"Ready for Review",
-    "Notes given":"Revisions","Revisions":"Revisions","Revisions Amended":"Revisions",
-    "Need End Cards":"Revisions","Need 4x5 version":"Revisions",
+    "In Editing":"In Editing","Internal Review":"In Editing","Ready For Review":"Ready for Review",
+    "Notes given":"Revisions","Revisions":"Revisions","Revisions Amended":"Revisions","Need End Cards":"Revisions","Need 4x5 version":"Revisions",
     "Client Review":"Client Review","Pending Approval":"Client Review","4x5s Approved":"Client Review",
-    "Pending Export":"Pending Export","Pending Exports":"Pending Export",
-    "Exported":"Exported",
+    "Pending Export":"Pending Export","Pending Exports":"Pending Export","Exported":"Exported",
 }
-EMOJI = {"🔒 Locking in creator":"🔒","📦 Product sent":"📦","🎬 Filming":"🎬",
-         "🔄 Creator revisions":"🔄","🎞️ In editing":"🎞️","✂️ Editing revisions":"✂️",
-         "✅ Approved internally":"✅","📤 Pending export":"📤","🏁 Exported":"🏁"}
+EMOJI = {"🔒 Locking in creator":"🔒","📦 Product sent":"📦","🎬 Filming":"🎬","🔄 Creator revisions":"🔄",
+         "🎞️ In editing":"🎞️","✂️ Editing revisions":"✂️","✅ Approved internally":"✅","📤 Pending export":"📤","🏁 Exported":"🏁"}
 SEP = "———————"
 
-# 6. NOTION HELPERS
-def _post(p, b): r=requests.post(f"{API}{p}",headers=HEADERS,json=b,timeout=30); r.raise_for_status(); return r.json()
-def _patch(p, b): r=requests.patch(f"{API}{p}",headers=HEADERS,json=b,timeout=30); r.raise_for_status(); return r.json()
+def _post(p,b): r=requests.post(f"{API}{p}",headers=HEADERS,json=b,timeout=30); r.raise_for_status(); return r.json()
+def _patch(p,b): r=requests.patch(f"{API}{p}",headers=HEADERS,json=b,timeout=30); r.raise_for_status(); return r.json()
 
 def query_db(db_id, filt=None):
-    rows, cur = [], None
+    rows,cur=[],None
     while True:
         body={"page_size":100}
         if filt: body["filter"]=filt
         if cur:  body["start_cursor"]=cur
-        d=_post(f"/databases/{db_id}/query", body); rows+=d["results"]
+        d=_post(f"/databases/{db_id}/query",body); rows+=d["results"]
         if not d.get("has_more"): return rows
         cur=d["next_cursor"]; time.sleep(0.2)
 
@@ -137,31 +97,31 @@ def ptxt(p):
     if t=="url":          return p.get("url") or ""
     return ""
 
-_TITLE_CACHE={}
+_CACHE={}
 def relation_first_title(p):
     try:
         if not p or p["type"]!="relation" or not p["relation"]: return ""
         pid=p["relation"][0]["id"]
-        if pid in _TITLE_CACHE: return _TITLE_CACHE[pid]
+        if pid in _CACHE: return _CACHE[pid]
         r=requests.get(f"{API}/pages/{pid}",headers=HEADERS,timeout=30); r.raise_for_status()
-        props=r.json()["properties"]
-        for v in props.values():
+        for v in r.json()["properties"].values():
             if v["type"]=="title":
-                name="".join(x["plain_text"] for x in v["title"]); _TITLE_CACHE[pid]=name; return name
+                name="".join(x["plain_text"] for x in v["title"]); _CACHE[pid]=name; return name
     except Exception: pass
     return ""
 
 def cnum_job(s):
-    m=re.search(r"C(\d+)", s or "", re.IGNORECASE); return int(m.group(1)) if m else None
+    m=re.search(r"C(\d+)",s or "",re.IGNORECASE); return int(m.group(1)) if m else None
 def cnum_master(s):
-    m=re.search(r"(\d+)", s or ""); return int(m.group(1)) if m else None
+    m=re.search(r"(\d+)",s or ""); return int(m.group(1)) if m else None
 
-# 7. BUILD per-concept records
 def records_for(brand, product, round_name, flow_client):
     master=query_db(DB_MASTER, {"property":M_ROUND,"select":{"equals":round_name}})
     concepts={}
     for row in master:
         pr=row["properties"]
+        cname=relation_first_title(pr.get(M_CLIENT_REL))
+        if brand and brand.lower() not in cname.lower(): continue
         if product and product.lower() not in ptxt(pr.get(M_PRODUCT)).lower(): continue
         n=cnum_master(ptxt(pr.get(M_CONCEPT_NO)))
         if n is None: continue
@@ -173,93 +133,85 @@ def records_for(brand, product, round_name, flow_client):
         if concepts[n]["type"].strip().upper().startswith("UGC"): paid.append(n)
         elif "STATIC" in concepts[n]["type"].upper(): break
     paid=set(paid)
-
     flow={}
     try:
-        for row in query_db(DB_FLOW, {"and":[
-                {"property":F_ROUND,"select":{"equals":round_name}},
-                {"property":F_CLIENT,"select":{"equals":flow_client}}]}):
+        for row in query_db(DB_FLOW, {"and":[{"property":F_ROUND,"select":{"equals":round_name}},
+                                             {"property":F_CLIENT,"select":{"equals":flow_client}}]}):
             pr=row["properties"]
             if "video" not in ptxt(pr.get(F_FORMAT)).lower(): continue
             n=cnum_job(ptxt(pr.get(F_JOBNAME)))
             if n is not None:
-                flow[n]={"status":ptxt(pr.get(F_STATUS)),
-                         "script":ptxt(pr.get(F_SCRIPT)),"review":ptxt(pr.get(F_REVIEW))}
+                flow[n]={"status":ptxt(pr.get(F_STATUS)),"script":ptxt(pr.get(F_SCRIPT)),"review":ptxt(pr.get(F_REVIEW))}
     except requests.HTTPError: pass
-
     out={}
     for n in sorted(paid):
-        cs=concepts[n]["cs"]; f=flow.get(n,{})
-        fs=f.get("status")
+        cs=concepts[n]["cs"]; f=flow.get(n,{}); fs=f.get("status")
         if fs and fs in FLOW_TO_STAGE: stage=FLOW_TO_STAGE[fs]
         elif cs in CS_TO_STAGE:        stage=CS_TO_STAGE[cs]
         elif cs=="Failed":             stage="❌ Failed"
         else:                          stage="⚪ no status yet"
-        out[n]={"name":concepts[n]["name"],"creator":concepts[n]["creator"],
-                "stage":stage,"edit":FLOW_TO_EDIT.get(fs,""),
-                "script":f.get("script",""),"review":f.get("review",""),
-                "pid":concepts[n]["pid"]}
+        out[n]={"name":concepts[n]["name"],"creator":concepts[n]["creator"],"stage":stage,
+                "edit":FLOW_TO_EDIT.get(fs,""),"script":f.get("script",""),"review":f.get("review",""),"pid":concepts[n]["pid"]}
     return out
 
-# 8. WRITES
 def set_master_stage(pid, stage):
     if stage.startswith(("⚪","❌")): return
     _patch(f"/pages/{pid}", {"properties":{M_STAGE:{"select":{"name":stage}}}})
 
-def upsert_concept(short_client, round_name, n, rec):
-    title=rec["name"] or f"{short_client} {round_name} C{n}"
+def upsert_concept(client_lbl, round_name, n, rec, sku=""):
+    title=rec["name"] or f"{client_lbl} {round_name} C{n}"
     props={
         C_CONCEPT:{"title":[{"type":"text","text":{"content":f"C{n} — {title}"}}]},
-        C_CLIENT:{"select":{"name":short_client}},
+        C_CLIENT:{"select":{"name":client_lbl}},
         C_ROUND:{"select":{"name":round_name}},
         C_NUM:{"rich_text":[{"type":"text","text":{"content":f"C{n}"}}]},
         C_FORMAT:{"select":{"name":"UGC"}},
+        C_SKU:{"rich_text":[{"type":"text","text":{"content":sku}}]} if sku else {"rich_text":[]},
     }
     if rec["creator"]: props[C_CREATOR]={"rich_text":[{"type":"text","text":{"content":rec["creator"]}}]}
     if not rec["stage"].startswith(("⚪","❌")): props[C_STAGE]={"select":{"name":rec["stage"]}}
-    if rec["edit"]:    props[C_EDIT]={"select":{"name":rec["edit"]}}
-    if rec["script"]:  props[C_SCRIPT]={"url":rec["script"]}
-    if rec["review"]:  props[C_REVIEW]={"url":rec["review"]}
-    found=query_db(DB_CONCEPT, {"and":[
-        {"property":C_CLIENT,"select":{"equals":short_client}},
-        {"property":C_ROUND,"select":{"equals":round_name}},
-        {"property":C_NUM,"rich_text":{"equals":f"C{n}"}}]})
+    if rec["edit"]:   props[C_EDIT]={"select":{"name":rec["edit"]}}
+    if rec["script"]: props[C_SCRIPT]={"url":rec["script"]}
+    if rec["review"]: props[C_REVIEW]={"url":rec["review"]}
+    keyflt=[{"property":C_CLIENT,"select":{"equals":client_lbl}},
+            {"property":C_ROUND,"select":{"equals":round_name}},
+            {"property":C_NUM,"rich_text":{"equals":f"C{n}"}},
+            {"property":C_SKU,"rich_text":{"equals":sku}} if sku else {"property":C_SKU,"rich_text":{"is_empty":True}}]
+    found=query_db(DB_CONCEPT, {"and":keyflt})
     if found: _patch(f"/pages/{found[0]['id']}", {"properties":props})
     else:     _post("/pages", {"parent":{"database_id":DB_CONCEPT},"properties":props})
 
 def update_tracker(pid, recs, existing):
-    lines=["📋 **Concept status** — auto-synced"]; exported=0
+    lines=["📋 Concept status (auto-synced)"]; exported=0
     for n in sorted(recs):
         st=recs[n]["stage"]; emo=EMOJI.get(st,"•"); word=st.split(" ",1)[1] if " " in st else st
-        lines.append(f"**C{n}:** {emo} **{word}**")
+        lines.append(f"C{n}: {emo} {word}")
         if st=="🏁 Exported": exported+=1
     total=len(recs); pct=round(100*exported/total) if total else 0
     human=existing.split(SEP,1)[1].strip() if SEP in existing else existing.strip()
-    notes="<br>".join(lines)+f"<br>{SEP}<br>"+human
+    notes=("\n".join(lines)+f"\n{SEP}\n"+human)[:1900]
     _patch(f"/pages/{pid}", {"properties":{
         T_NOTES:{"rich_text":[{"type":"text","text":{"content":notes}}]},
         T_COMPLETION:{"rich_text":[{"type":"text","text":{"content":f"{exported}/{total} exported ({pct}%)"}}]}}})
 
-# 9. MAIN
-def tracker_page(client,round_name):
-    rows=query_db(DB_TRACKER, {"and":[
-        {"property":T_CLIENT,"title":{"equals":client}},
-        {"property":T_ROUND,"status":{"equals":round_name}}]})
+def tracker_page(client, round_name):
+    rows=query_db(DB_TRACKER, {"and":[{"property":T_CLIENT,"title":{"equals":client}},
+                                      {"property":T_ROUND,"status":{"equals":round_name}}]})
     return rows[0] if rows else None
 
 def main():
     if not NOTION_TOKEN: sys.exit("Set NOTION_TOKEN first.")
-    for client,round_name,brand,product,flow_client,short in CLIENT_MAP:
+    for client,round_name,brand,product,flow_client,lbl in CLIENT_MAP:
         try:
             recs=records_for(brand,product,round_name,flow_client)
             if not recs:
-                print(f"WARN  {client} {round_name}: no concepts found — skipped"); continue
+                print(f"WARN  {client} {round_name}: no concepts found"); continue
             for n,rec in recs.items():
                 set_master_stage(rec["pid"],rec["stage"])
-                upsert_concept(short,round_name,n,rec)
+                upsert_concept(lbl,round_name,n,rec,sku=(product or ""))
             page=tracker_page(client,round_name)
             if page: update_tracker(page["id"],recs,ptxt(page["properties"].get(T_NOTES)))
-            print(f"OK  {client} {round_name}: {len(recs)} concepts synced")
+            print(f"OK  {client} {round_name}: {len(recs)} concepts")
         except Exception as e:
             print(f"ERROR  {client} {round_name}: {e}")
 
