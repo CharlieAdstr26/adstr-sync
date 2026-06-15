@@ -1,59 +1,79 @@
-if __name__=="__main__":
-       main()
-    #!/usr/bin/env python3
-"""Adstr Stage Sync."""
+#!/usr/bin/env python3
+"""Adstr Stage Sync — Route 3 (Notion API automation)."""
+
 import os, re, sys, time, requests
 
 NOTION_TOKEN = os.environ.get("NOTION_TOKEN")
 HEADERS = {"Authorization": f"Bearer {NOTION_TOKEN}", "Notion-Version": "2022-06-28", "Content-Type": "application/json"}
 API = "https://api.notion.com/v1"
 
-DB_MASTER="37044225-6652-8133-84e3-e044fbf22942"; DB_FLOW="37044225-6652-8188-8496-c3945046d0ea"
-DB_TRACKER="06a44225-6652-83ac-94d2-015afef1b629"; DB_CONCEPT="f6a176a3-e058-4c94-8d39-8c42d5b9a41c"
+DB_MASTER  = "37044225-6652-8133-84e3-e044fbf22942"
+DB_FLOW    = "37044225-6652-8188-8496-c3945046d0ea"
+DB_TRACKER = "06a44225-6652-83ac-94d2-015afef1b629"
+DB_CONCEPT = "f6a176a3-e058-4c94-8d39-8c42d5b9a41c"
 
 M_CONCEPT_NO="Concept No. "; M_CONCEPT_NM="Concept Name"; M_ROUND="Official Round"
 M_TYPE="Type"; M_PRODUCT="Product"; M_CLIENT_REL="Current Clients"; M_CREATOR="Creator(s)"
 M_CS_STATUS="CS Status"; M_STAGE="🎯 Stage"
-F_JOBNAME="Job#_Name"; F_ROUND="Offical Round"; F_CLIENT="Client"; F_FORMAT="Format"
-F_STATUS="Status"; F_SCRIPT="Script Link"; F_REVIEW="Review Link"
+
+F_JOBNAME="Job#_Name"; F_ROUND="Offical Round"; F_CLIENT="Client"
+F_FORMAT="Format"; F_STATUS="Status"; F_SCRIPT="Script Link"; F_REVIEW="Review Link"
+
 T_CLIENT="Client"; T_ROUND="Round "; T_NOTES="📝 Notes"; T_COMPLETION="🏁 Round Completion"
+
 C_CONCEPT="Concept"; C_CLIENT="Client"; C_ROUND="Round"; C_NUM="Concept #"; C_SKU="SKU"
-C_CREATOR="Creator"; C_STAGE="🎯 Stage"; C_EDIT="✂️ Editing Status"; C_FORMAT="Format"
-C_SCRIPT="Script Link"; C_REVIEW="Review Link"
+C_CREATOR="Creator"; C_STAGE="🎯 Stage"; C_EDIT="✂️ Editing Status"
+C_FORMAT="Format"; C_SCRIPT="Script Link"; C_REVIEW="Review Link"
 
-CLIENT_IDS={"Ninja":"85a5b1ef-6e78-44cf-a71e-64e1b386f710","Tao Clean":"34944225-6652-80b6-9634-d79aa269f786",
-"Nu Harvest":"34444225-6652-8073-949a-dc06806668a3","SoleBrace":"31844225-6652-80d2-bfb0-cffc7e820f48",
-"Frase Skin":"1e844225-6652-80dc-8fa6-cba66e6d7623","PuraU":"2a644225-6652-80f3-9076-c86a7f2ca51d",
-"Whif":"2f044225-6652-8070-abcb-ef1cc92f1de3","Hyro":"2f144225-6652-808e-b2f7-d3d5f0b772c5",
-"Healr":"21444225-6652-8000-b9c8-d60778236d25"}
+CLIENT_IDS = {
+    "Ninja":"85a5b1ef-6e78-44cf-a71e-64e1b386f710","Tao Clean":"34944225-6652-80b6-9634-d79aa269f786",
+    "Nu Harvest":"34444225-6652-8073-949a-dc06806668a3","SoleBrace":"31844225-6652-80d2-bfb0-cffc7e820f48",
+    "Frase Skin":"1e844225-6652-80dc-8fa6-cba66e6d7623","PuraU":"2a644225-6652-80f3-9076-c86a7f2ca51d",
+    "Whif":"2f044225-6652-8070-abcb-ef1cc92f1de3","Hyro":"2f144225-6652-808e-b2f7-d3d5f0b772c5",
+    "Healr":"21444225-6652-8000-b9c8-d60778236d25",
+}
 
-CLIENT_MAP=[
-("Ninja FS605 SLUSHi MAX","Round 22","Ninja","FS605 Slushi Max","Ninja","🥷 Ninja"),
-("Ninja FS302 PKANZ SLUSHi Pink","Round 22","Ninja","FS302","Ninja","🥷 Ninja"),
-("Ninja FN101PKANZ CRISPi Pink","Round 22","Ninja","FN101","Ninja","🥷 Ninja"),
-("Ninja NC302 CREAMi Pink","Round 22","Ninja","NC302","Ninja","🥷 Ninja"),
-("Ninja AS101 CRISPi Pro","Round 23","Ninja","AS101","Ninja","🥷 Ninja"),
-("Ninja DB351 BlendBOSS","Round 23","Ninja","DB351","Ninja","🥷 Ninja"),
-("Ninja ES601 Luxe Cafe","Round 23","Ninja","ES601","Ninja","🥷 Ninja"),
-("Ninja NC501 Creami","Round 23","Ninja","NC501","Ninja","🥷 Ninja"),
-("Ninja NC300 CREAMi","Round 24","Ninja","NC300","Ninja","🥷 Ninja"),
-("Tao Clean","Round 1","Tao Clean",None,"Tao Clean","🦷 Tao Clean"),
-("Tao Clean","Round 2","Tao Clean",None,"Tao Clean","🦷 Tao Clean"),
-("Nu Harvest","Round 1","Nu Harvest",None,"Nu Harvest","🎀 Nu Harvest"),
-("SoleBrace","Round 2","SoleBrace",None,"SoleBrace","🦶 SoleBrace"),
-("Frase Skin","Round 10","Frase Skin",None,"Frase Skin","👷 Frase Skin"),
-("PuraU","Round 4","PuraU",None,"PuraU","💊 PuraU"),
-("PuraU","Round 5","PuraU",None,"PuraU","💊 PuraU"),
-("Whif","Round 4","Whif",None,"WHIF","👃 Whif"),
-("Whif","Round 5","Whif",None,"WHIF","👃 Whif"),
-("Hyro","Round 3","Hyro",None,"Hyro","⚡ Hyro"),
-("Healr","Round 5","Healr",None,"Healr","🟠 Healr")]
+CLIENT_MAP = [
+    ("Ninja FS605 SLUSHi MAX",        "Round 22",  "Ninja",      "FS605 Slushi Max", "Ninja",     "🥷 Ninja"),
+    ("Ninja FS302 PKANZ SLUSHi Pink", "Round 22",  "Ninja",      "FS302",            "Ninja",     "🥷 Ninja"),
+    ("Ninja FN101PKANZ CRISPi Pink",  "Round 22",  "Ninja",      "FN101",            "Ninja",     "🥷 Ninja"),
+    ("Ninja NC302 CREAMi Pink",       "Round 22",  "Ninja",      "NC302",            "Ninja",     "🥷 Ninja"),
+    ("Ninja AS101 CRISPi Pro",        "Round 23",  "Ninja",      "AS101",            "Ninja",     "🥷 Ninja"),
+    ("Ninja DB351 BlendBOSS",         "Round 23",  "Ninja",      "DB351",            "Ninja",     "🥷 Ninja"),
+    ("Ninja ES601 Luxe Cafe",         "Round 23",  "Ninja",      "ES601",            "Ninja",     "🥷 Ninja"),
+    ("Ninja NC501 Creami",            "Round 23",  "Ninja",      "NC501",            "Ninja",     "🥷 Ninja"),
+    ("Ninja NC300 CREAMi",            "Round 24",  "Ninja",      "NC300",            "Ninja",     "🥷 Ninja"),
+    ("Tao Clean",                     "Round 1",   "Tao Clean",  None,               "Tao Clean", "🦷 Tao Clean"),
+    ("Tao Clean",                     "Round 2",   "Tao Clean",  None,               "Tao Clean", "🦷 Tao Clean"),
+    ("Nu Harvest",                    "Round 1",   "Nu Harvest", None,               "Nu Harvest","🎀 Nu Harvest"),
+    ("SoleBrace",                     "Round 2",   "SoleBrace",  None,               "SoleBrace", "🦶 SoleBrace"),
+    ("Frase Skin",                    "Round 10",  "Frase Skin", None,               "Frase Skin","👷 Frase Skin"),
+    ("PuraU",                         "Round 4",   "PuraU",      None,               "PuraU",     "💊 PuraU"),
+    ("PuraU",                         "Round 5",   "PuraU",      None,               "PuraU",     "💊 PuraU"),
+    ("Whif",                          "Round 4",   "Whif",       None,               "WHIF",      "👃 Whif"),
+    ("Whif",                          "Round 5",   "Whif",       None,               "WHIF",      "👃 Whif"),
+    ("Hyro",                          "Round 3",   "Hyro",       None,               "Hyro",      "⚡ Hyro"),
+    ("Healr",                         "Round 5",   "Healr",      None,               "Healr",     "🟠 Healr"),
+]
 
-CS_TO_STAGE={"Reached Out [WhatsApp]":"🔒 Locking in creator","Reached Out [Email]":"🔒 Locking in creator","In Talks - Keen":"🔒 Locking in creator","Signing Contract":"🔒 Locking in creator","Agreed":"🔒 Locking in creator","Ordered Product":"📦 Product sent","Filming":"🎬 Filming","REVISIONS":"🔄 Creator revisions","Reviewing":"🎞️ In editing","FLOW":"🎞️ In editing","COMPLETE":"🏁 Exported"}
-FLOW_TO_STAGE={"Update Status":"🎞️ In editing","Awaiting Assets":"🎞️ In editing","Ready to Edit":"🎞️ In editing","In Editing":"🎞️ In editing","Internal Review":"🎞️ In editing","Ready For Review":"🎞️ In editing","Notes given":"✂️ Editing revisions","Revisions":"✂️ Editing revisions","Revisions Amended":"✂️ Editing revisions","Need End Cards":"✂️ Editing revisions","Need 4x5 version":"✂️ Editing revisions","Pending Approval":"✅ Approved internally","4x5s Approved":"✅ Approved internally","Client Review":"✅ Approved internally","Pending Export":"📤 Pending export","Pending Exports":"📤 Pending export","Exported":"🏁 Exported"}
-FLOW_TO_EDIT={"Ready to Edit":"Ready to Edit","Update Status":"Ready to Edit","Awaiting Assets":"Ready to Edit","In Editing":"In Editing","Internal Review":"In Editing","Ready For Review":"Ready for Review","Notes given":"Revisions","Revisions":"Revisions","Revisions Amended":"Revisions","Need End Cards":"Revisions","Need 4x5 version":"Revisions","Client Review":"Client Review","Pending Approval":"Client Review","4x5s Approved":"Client Review","Pending Export":"Pending Export","Pending Exports":"Pending Export","Exported":"Exported"}
-EMOJI={"🔒 Locking in creator":"🔒","📦 Product sent":"📦","🎬 Filming":"🎬","🔄 Creator revisions":"🔄","🎞️ In editing":"🎞️","✂️ Editing revisions":"✂️","✅ Approved internally":"✅","📤 Pending export":"📤","🏁 Exported":"🏁"}
-SEP="———————"
+CS_TO_STAGE = {"Reached Out [WhatsApp]":"🔒 Locking in creator","Reached Out [Email]":"🔒 Locking in creator",
+"In Talks - Keen":"🔒 Locking in creator","Signing Contract":"🔒 Locking in creator","Agreed":"🔒 Locking in creator",
+"Ordered Product":"📦 Product sent","Filming":"🎬 Filming","REVISIONS":"🔄 Creator revisions",
+"Reviewing":"🎞️ In editing","FLOW":"🎞️ In editing","COMPLETE":"🏁 Exported"}
+FLOW_TO_STAGE = {"Update Status":"🎞️ In editing","Awaiting Assets":"🎞️ In editing","Ready to Edit":"🎞️ In editing",
+"In Editing":"🎞️ In editing","Internal Review":"🎞️ In editing","Ready For Review":"🎞️ In editing",
+"Notes given":"✂️ Editing revisions","Revisions":"✂️ Editing revisions","Revisions Amended":"✂️ Editing revisions",
+"Need End Cards":"✂️ Editing revisions","Need 4x5 version":"✂️ Editing revisions","Pending Approval":"✅ Approved internally",
+"4x5s Approved":"✅ Approved internally","Client Review":"✅ Approved internally","Pending Export":"📤 Pending export",
+"Pending Exports":"📤 Pending export","Exported":"🏁 Exported"}
+FLOW_TO_EDIT = {"Ready to Edit":"Ready to Edit","Update Status":"Ready to Edit","Awaiting Assets":"Ready to Edit",
+"In Editing":"In Editing","Internal Review":"In Editing","Ready For Review":"Ready for Review","Notes given":"Revisions",
+"Revisions":"Revisions","Revisions Amended":"Revisions","Need End Cards":"Revisions","Need 4x5 version":"Revisions",
+"Client Review":"Client Review","Pending Approval":"Client Review","4x5s Approved":"Client Review",
+"Pending Export":"Pending Export","Pending Exports":"Pending Export","Exported":"Exported"}
+EMOJI = {"🔒 Locking in creator":"🔒","📦 Product sent":"📦","🎬 Filming":"🎬","🔄 Creator revisions":"🔄",
+"🎞️ In editing":"🎞️","✂️ Editing revisions":"✂️","✅ Approved internally":"✅","📤 Pending export":"📤","🏁 Exported":"🏁"}
+SEP = "———————"
 
 def _post(p,b): r=requests.post(f"{API}{p}",headers=HEADERS,json=b,timeout=30); r.raise_for_status(); return r.json()
 def _patch(p,b): r=requests.patch(f"{API}{p}",headers=HEADERS,json=b,timeout=30); r.raise_for_status(); return r.json()
@@ -98,6 +118,7 @@ def cnum_master(s):
     m=re.search(r"(\d+)",s or ""); return int(m.group(1)) if m else None
 
 def records_for(client_id, product, round_name, flow_client):
+    # Filter on Notion's side: round AND the Current Clients relation contains this client.
     flt={"and":[{"property":M_ROUND,"select":{"equals":round_name}}]}
     if client_id:
         flt["and"].append({"property":M_CLIENT_REL,"relation":{"contains":client_id}})
@@ -108,7 +129,9 @@ def records_for(client_id, product, round_name, flow_client):
         if product and product.lower() not in ptxt(pr.get(M_PRODUCT)).lower(): continue
         n=cnum_master(ptxt(pr.get(M_CONCEPT_NO)))
         if n is None: continue
-        concepts[n]={"cs":ptxt(pr.get(M_CS_STATUS)),"type":ptxt(pr.get(M_TYPE)),"name":ptxt(pr.get(M_CONCEPT_NM)) or ptxt(pr.get(M_CONCEPT_NO)),"creator":relation_first_title(pr.get(M_CREATOR)),"pid":row["id"]}
+        concepts[n]={"cs":ptxt(pr.get(M_CS_STATUS)),"type":ptxt(pr.get(M_TYPE)),
+                     "name":ptxt(pr.get(M_CONCEPT_NM)) or ptxt(pr.get(M_CONCEPT_NO)),
+                     "creator":relation_first_title(pr.get(M_CREATOR)),"pid":row["id"]}
     paid=[]
     for n in sorted(concepts):
         if concepts[n]["type"].strip().upper().startswith("UGC"): paid.append(n)
@@ -116,7 +139,8 @@ def records_for(client_id, product, round_name, flow_client):
     paid=set(paid)
     flow={}
     try:
-        for row in query_db(DB_FLOW, {"and":[{"property":F_ROUND,"select":{"equals":round_name}},{"property":F_CLIENT,"select":{"equals":flow_client}}]}):
+        for row in query_db(DB_FLOW, {"and":[{"property":F_ROUND,"select":{"equals":round_name}},
+                                             {"property":F_CLIENT,"select":{"equals":flow_client}}]}):
             pr=row["properties"]
             if "video" not in ptxt(pr.get(F_FORMAT)).lower(): continue
             n=cnum_job(ptxt(pr.get(F_JOBNAME)))
@@ -130,7 +154,8 @@ def records_for(client_id, product, round_name, flow_client):
         elif cs in CS_TO_STAGE:        stage=CS_TO_STAGE[cs]
         elif cs=="Failed":             stage="❌ Failed"
         else:                          stage="⚪ no status yet"
-        out[n]={"name":concepts[n]["name"],"creator":concepts[n]["creator"],"stage":stage,"edit":FLOW_TO_EDIT.get(fs,""),"script":f.get("script",""),"review":f.get("review",""),"pid":concepts[n]["pid"]}
+        out[n]={"name":concepts[n]["name"],"creator":concepts[n]["creator"],"stage":stage,
+                "edit":FLOW_TO_EDIT.get(fs,""),"script":f.get("script",""),"review":f.get("review",""),"pid":concepts[n]["pid"]}
     return out
 
 def set_master_stage(pid, stage):
@@ -139,13 +164,18 @@ def set_master_stage(pid, stage):
 
 def upsert_concept(client_lbl, round_name, n, rec, sku=""):
     title=rec["name"] or f"{client_lbl} {round_name} C{n}"
-    props={C_CONCEPT:{"title":[{"type":"text","text":{"content":f"C{n} — {title}"}}]},C_CLIENT:{"select":{"name":client_lbl}},C_ROUND:{"select":{"name":round_name}},C_NUM:{"rich_text":[{"type":"text","text":{"content":f"C{n}"}}]},C_FORMAT:{"select":{"name":"UGC"}},C_SKU:{"rich_text":[{"type":"text","text":{"content":sku}}]} if sku else {"rich_text":[]}}
+    props={C_CONCEPT:{"title":[{"type":"text","text":{"content":f"C{n} — {title}"}}]},
+        C_CLIENT:{"select":{"name":client_lbl}},C_ROUND:{"select":{"name":round_name}},
+        C_NUM:{"rich_text":[{"type":"text","text":{"content":f"C{n}"}}]},C_FORMAT:{"select":{"name":"UGC"}},
+        C_SKU:{"rich_text":[{"type":"text","text":{"content":sku}}]} if sku else {"rich_text":[]}}
     if rec["creator"]: props[C_CREATOR]={"rich_text":[{"type":"text","text":{"content":rec["creator"]}}]}
     if not rec["stage"].startswith(("⚪","❌")): props[C_STAGE]={"select":{"name":rec["stage"]}}
     if rec["edit"]:   props[C_EDIT]={"select":{"name":rec["edit"]}}
     if rec["script"]: props[C_SCRIPT]={"url":rec["script"]}
     if rec["review"]: props[C_REVIEW]={"url":rec["review"]}
-    keyflt=[{"property":C_CLIENT,"select":{"equals":client_lbl}},{"property":C_ROUND,"select":{"equals":round_name}},{"property":C_NUM,"rich_text":{"equals":f"C{n}"}},{"property":C_SKU,"rich_text":{"equals":sku}} if sku else {"property":C_SKU,"rich_text":{"is_empty":True}}]
+    keyflt=[{"property":C_CLIENT,"select":{"equals":client_lbl}},{"property":C_ROUND,"select":{"equals":round_name}},
+            {"property":C_NUM,"rich_text":{"equals":f"C{n}"}},
+            {"property":C_SKU,"rich_text":{"equals":sku}} if sku else {"property":C_SKU,"rich_text":{"is_empty":True}}]
     found=query_db(DB_CONCEPT, {"and":keyflt})
     if found: _patch(f"/pages/{found[0]['id']}", {"properties":props})
     else:     _post("/pages", {"parent":{"database_id":DB_CONCEPT},"properties":props})
@@ -159,10 +189,12 @@ def update_tracker(pid, recs, existing):
     total=len(recs); pct=round(100*exported/total) if total else 0
     human=existing.split(SEP,1)[1].strip() if SEP in existing else existing.strip()
     notes=("\n".join(lines)+f"\n{SEP}\n"+human)[:1900]
-    _patch(f"/pages/{pid}", {"properties":{T_NOTES:{"rich_text":[{"type":"text","text":{"content":notes}}]},T_COMPLETION:{"rich_text":[{"type":"text","text":{"content":f"{exported}/{total} exported ({pct}%)"}}]}}})
+    _patch(f"/pages/{pid}", {"properties":{T_NOTES:{"rich_text":[{"type":"text","text":{"content":notes}}]},
+        T_COMPLETION:{"rich_text":[{"type":"text","text":{"content":f"{exported}/{total} exported ({pct}%)"}}]}}})
 
 def tracker_page(client, round_name):
-    rows=query_db(DB_TRACKER, {"and":[{"property":T_CLIENT,"title":{"equals":client}},{"property":T_ROUND,"status":{"equals":round_name}}]})
+    rows=query_db(DB_TRACKER, {"and":[{"property":T_CLIENT,"title":{"equals":client}},
+                                      {"property":T_ROUND,"status":{"equals":round_name}}]})
     return rows[0] if rows else None
 
 def main():
