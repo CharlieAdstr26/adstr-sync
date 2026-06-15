@@ -25,6 +25,18 @@ C_CONCEPT="Concept"; C_CLIENT="Client"; C_ROUND="Round"; C_NUM="Concept #"; C_SK
 C_CREATOR="Creator"; C_STAGE="🎯 Stage"; C_EDIT="✂️ Editing Status"
 C_FORMAT="Format"; C_SCRIPT="Script Link"; C_REVIEW="Review Link"
 
+CLIENT_IDS = {
+    "Ninja":      "85a5b1ef-6e78-44cf-a71e-64e1b386f710",
+    "Tao Clean":  "34944225-6652-80b6-9634-d79aa269f786",
+    "Nu Harvest": "34444225-6652-8073-949a-dc06806668a3",
+    "SoleBrace":  "31844225-6652-80d2-bfb0-cffc7e820f48",
+    "Frase Skin": "1e844225-6652-80dc-8fa6-cba66e6d7623",
+    "PuraU":      "2a644225-6652-80f3-9076-c86a7f2ca51d",
+    "Whif":       "2f044225-6652-8070-abcb-ef1cc92f1de3",
+    "Hyro":       "2f144225-6652-808e-b2f7-d3d5f0b772c5",
+    "Healr":      "21444225-6652-8000-b9c8-d60778236d25",
+}
+
 CLIENT_MAP = [
     ("Ninja FS605 SLUSHi MAX",        "Round 22",  "Ninja",      "FS605 Slushi Max", "Ninja",     "🥷 Ninja"),
     ("Ninja FS302 PKANZ SLUSHi Pink", "Round 22",  "Ninja",      "FS302",            "Ninja",     "🥷 Ninja"),
@@ -97,6 +109,11 @@ def ptxt(p):
     if t=="url":          return p.get("url") or ""
     return ""
 
+def rel_ids(p):
+    if p and p.get("type")=="relation":
+        return {r["id"].replace("-","") for r in p["relation"]}
+    return set()
+
 _CACHE={}
 def relation_first_title(p):
     try:
@@ -115,13 +132,13 @@ def cnum_job(s):
 def cnum_master(s):
     m=re.search(r"(\d+)",s or ""); return int(m.group(1)) if m else None
 
-def records_for(brand, product, round_name, flow_client):
+def records_for(client_id, product, round_name, flow_client):
     master=query_db(DB_MASTER, {"property":M_ROUND,"select":{"equals":round_name}})
     concepts={}
+    cid=(client_id or "").replace("-","")
     for row in master:
         pr=row["properties"]
-        cname=relation_first_title(pr.get(M_CLIENT_REL))
-        if brand and brand.lower() not in cname.lower(): continue
+        if cid and cid not in rel_ids(pr.get(M_CLIENT_REL)): continue
         if product and product.lower() not in ptxt(pr.get(M_PRODUCT)).lower(): continue
         n=cnum_master(ptxt(pr.get(M_CONCEPT_NO)))
         if n is None: continue
@@ -203,7 +220,7 @@ def main():
     if not NOTION_TOKEN: sys.exit("Set NOTION_TOKEN first.")
     for client,round_name,brand,product,flow_client,lbl in CLIENT_MAP:
         try:
-            recs=records_for(brand,product,round_name,flow_client)
+            recs=records_for(CLIENT_IDS.get(brand,""),product,round_name,flow_client)
             if not recs:
                 print(f"WARN  {client} {round_name}: no concepts found"); continue
             for n,rec in recs.items():
