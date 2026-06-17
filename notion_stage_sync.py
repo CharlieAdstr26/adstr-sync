@@ -33,7 +33,10 @@ C_LINK="🔗 Concept"; C_BRAND="Clients"; C_SINCE="⏱️ Stage Since"
 # Client-facing Operations Trackers. brand -> the client's TOP-LEVEL Operations Tracker database id.
 # The script finds each round's product page, drills into the nested "O.T - Concepts" table, and fills
 # Live Status + Creator on each concept (matched by Concept #). Add one line per client as we roll out.
-OT_PARENT = {"Hyro":"7b744225-6652-8276-ba1d-81f64c999269"}      # the LIVE Operations Tracker (under Adstr Hub)
+OT_PARENT = {                                                    # LIVE Operations Trackers (under Adstr Hub)
+    "Hyro":"7b744225-6652-8276-ba1d-81f64c999269",
+    "PuraU":"73344225-6652-8368-a44d-818c604234d0",
+}
 OTC_NUM="Concept #"; OTC_STAGE="Live Status"; OTC_CREATOR="Creator"   # cols on the nested O.T - Concepts table
 
 # Known brand -> master Clients page id (overrides; new brands are looked up live)
