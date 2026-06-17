@@ -44,10 +44,10 @@ BRAND_EMOJI = {"Ninja":"🥷 Ninja","Tao Clean":"🦷 Tao Clean","Nu Harvest":"�
 FLOW_CLIENT_OVERRIDE = {"Whif":"WHIF"}
 
 CS_TO_STAGE = {"Reached Out [WhatsApp]":"🔒 Locking in creator","Reached Out [Email]":"🔒 Locking in creator",
-"In Talks - Keen":"🔒 Locking in creator","Signing Contract":"🔒 Locking in creator","Agreed":"🔒 Locking in creator",
+"In Talks - Keen":"🔒 Locking in creator","Signing Contract":"🔒 Locking in creator","Agreed":"✅ Creator locked in",
 "Ordered Product":"📦 Product sent","Filming":"🎬 Filming","REVISIONS":"🔄 Creator revisions",
-"Reviewing":"🎞️ In editing","FLOW":"🎞️ In editing","COMPLETE":"📥 Creator delivered"}
-FLOW_TO_STAGE = {"Update Status":"🎞️ In editing","Awaiting Assets":"🎞️ In editing","Ready to Edit":"🎞️ In editing",
+"Reviewing":"🎞️ In editing","FLOW":"🎞️ In editing","COMPLETE":"📁 Files uploaded"}
+FLOW_TO_STAGE = {"Update Status":"🎞️ In editing","Awaiting Assets":"🚧 Awaiting assets","Ready to Edit":"📝 Ready to Edit",
 "In Editing":"🎞️ In editing","Internal Review":"🎞️ In editing","Ready For Review":"🎞️ In editing",
 "Notes given":"✂️ Editing revisions","Revisions":"✂️ Editing revisions","Revisions Amended":"✂️ Editing revisions",
 "Need End Cards":"✂️ Editing revisions","Need 4x5 version":"✂️ Editing revisions","Pending Approval":"✅ Approved internally",
@@ -58,9 +58,9 @@ FLOW_TO_EDIT = {"Ready to Edit":"Ready to Edit","Update Status":"Ready to Edit",
 "Revisions":"Revisions","Revisions Amended":"Revisions","Need End Cards":"Revisions","Need 4x5 version":"Revisions",
 "Client Review":"Client Review","Pending Approval":"Client Review","4x5s Approved":"Client Review",
 "Pending Export":"Pending Export","Pending Exports":"Pending Export","Exported":"Exported"}
-EMOJI = {"🔒 Locking in creator":"🔒","📦 Product sent":"📦","🎬 Filming":"🎬","🔄 Creator revisions":"🔄",
-"📥 Creator delivered":"📥","🎞️ In editing":"🎞️","✂️ Editing revisions":"✂️","✅ Approved internally":"✅",
-"📤 Pending export":"📤","🏁 Exported":"🏁"}
+EMOJI = {"🔒 Locking in creator":"🔒","✅ Creator locked in":"✅","📦 Product sent":"📦","🎬 Filming":"🎬",
+"🔄 Creator revisions":"🔄","📁 Files uploaded":"📁","📝 Ready to Edit":"📝","🚧 Awaiting assets":"🚧",
+"🎞️ In editing":"🎞️","✂️ Editing revisions":"✂️","✅ Approved internally":"✅","📤 Pending export":"📤","🏁 Exported":"🏁"}
 SEP = "———————"
 
 def _post(p,b): r=requests.post(f"{API}{p}",headers=HEADERS,json=b,timeout=30); r.raise_for_status(); return r.json()
@@ -201,9 +201,9 @@ def update_tracker(pid, recs, existing):
         if st=="🏁 Exported": exported+=1
     total=len(recs); pct=round(100*exported/total) if total else 0
     if total and exported==total: health="✅ Round complete"
-    elif any(s in ("🔄 Creator revisions","✂️ Editing revisions") for s in stages): health="🔴 Roadblock"
+    elif any(s in ("🔄 Creator revisions","✂️ Editing revisions","🚧 Awaiting assets") for s in stages): health="🔴 Roadblock"
     elif pct>=60: health="🟢 Nearly there"
-    elif pct>=20 or any(s in ("🎬 Filming","📥 Creator delivered","🎞️ In editing","✅ Approved internally","📤 Pending export") for s in stages): health="🟡 In progress"
+    elif pct>=20 or any(s in ("🎬 Filming","📁 Files uploaded","📝 Ready to Edit","🎞️ In editing","✅ Approved internally","📤 Pending export") for s in stages): health="🟡 In progress"
     else: health="🟠 Just getting started"
     human=existing.split(SEP,1)[1].strip() if SEP in existing else existing.strip()
     notes=("\n".join(lines)+f"\n{SEP}\n"+human)[:1900]
