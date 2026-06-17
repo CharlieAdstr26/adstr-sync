@@ -30,6 +30,10 @@ C_CREATOR="Creator"; C_STAGE="🎯 Stage"; C_EDIT="✂️ Editing Status"
 C_FORMAT="Format"; C_SCRIPT="Script Link"; C_REVIEW="Review Link"
 C_LINK="🔗 Concept"; C_BRAND="Clients"; C_SINCE="⏱️ Stage Since"
 
+# Client-facing Operations Trackers — brand -> OT database id. Add a line per client as we roll out.
+OT_IDS = {"Hyro":"43044225-6652-83a1-89e0-81c4d173ad57"}
+OT_TITLE="Product"; OT_ROUND="Round "; OT_NUM="Concept #"; OT_STAGE="Live Status"; OT_CREATOR="Creator"
+
 # Known brand -> master Clients page id (overrides; new brands are looked up live)
 CLIENT_IDS = {
     "Ninja":"85a5b1ef-6e78-44cf-a71e-64e1b386f710","Tao Clean":"34944225-6652-80b6-9634-d79aa269f786",
@@ -53,7 +57,7 @@ FLOW_TO_STAGE = {"Update Status":"🎞️ In editing","Awaiting Assets":"🚧 Aw
 "Need End Cards":"✂️ Editing revisions","Need 4x5 version":"✂️ Editing revisions","Pending Approval":"✅ Approved internally",
 "4x5s Approved":"✅ Approved internally","Client Review":"✅ Approved internally","Pending Export":"📤 Pending export",
 "Pending Exports":"📤 Pending export","Exported":"🏁 Exported"}
-FLOW_TO_EDIT = {"Ready to Edit":"Ready to Edit","Update Status":"Ready to Edit","Awaiting Assets":"Ready to Edit",
+FLOW_TO_EDIT = {"Ready to Edit":"Ready to Edit","Update Status":"Ready to Edit","Awaiting Assets":"Missing clips",
 "In Editing":"In Editing","Internal Review":"In Editing","Ready For Review":"Ready for Review","Notes given":"Revisions",
 "Revisions":"Revisions","Revisions Amended":"Revisions","Need End Cards":"Revisions","Need 4x5 version":"Revisions",
 "Client Review":"Client Review","Pending Approval":"Client Review","4x5s Approved":"Client Review",
@@ -63,8 +67,13 @@ EMOJI = {"🔒 Locking in creator":"🔒","✅ Creator locked in":"✅","📦 Pr
 "🎞️ In editing":"🎞️","✂️ Editing revisions":"✂️","✅ Approved internally":"✅","📤 Pending export":"📤","🏁 Exported":"🏁"}
 SEP = "———————"
 
+def _norm(s): return (s or "").strip().lower()
+FLOW_TO_STAGE_LC = {_norm(k): v for k, v in FLOW_TO_STAGE.items()}
+FLOW_TO_EDIT_LC  = {_norm(k): v for k, v in FLOW_TO_EDIT.items()}
+
 def _post(p,b): r=requests.post(f"{API}{p}",headers=HEADERS,json=b,timeout=30); r.raise_for_status(); return r.json()
 def _patch(p,b): r=requests.patch(f"{API}{p}",headers=HEADERS,json=b,timeout=30); r.raise_for_status(); return r.json()
+def _get(p):    r=requests.get(f"{API}{p}",headers=HEADERS,timeout=30); r.raise_for_status(); return r.json()
 
 def query_db(db_id, filt=None):
     rows,cur=[],None
@@ -91,6 +100,20 @@ def first_rel_id(p):
     if p and p.get("type")=="relation" and p.get("relation"):
         return p["relation"][0]["id"]
     return ""
+
+_CNAME={}
+def creator_name(cid):
+    """Resolve a creator page id to its name (cached) for the client-facing OT text field."""
+    if not cid: return ""
+    if cid in _CNAME: return _CNAME[cid]
+    name=""
+    try:
+        d=_get(f"/pages/{cid}")
+        for p in d["properties"].values():
+            if p.get("type")=="title":
+                name="".join(x["plain_text"] for x in p["title"]); break
+    except Exception: pass
+    _CNAME[cid]=name; return name
 
 def cnum_job(s):
     m=re.search(r"C(\d+)",s or "",re.IGNORECASE); return int(m.group(1)) if m else None
@@ -138,9 +161,11 @@ def records_for(client_id, product, round_name, flow_client):
     paid=set(paid)
     flow={}
     try:
-        for row in query_db(DB_FLOW, {"and":[{"property":F_ROUND,"select":{"equals":round_name}},
-                                             {"property":F_CLIENT,"select":{"equals":flow_client}}]}):
+        # Query by round only, then match the client in code (case/space-insensitive) so a
+        # spelling difference in Flow's Client column can't silently hide the editing status.
+        for row in query_db(DB_FLOW, {"property":F_ROUND,"select":{"equals":round_name}}):
             pr=row["properties"]
+            if _norm(ptxt(pr.get(F_CLIENT))) != _norm(flow_client): continue
             if "video" not in ptxt(pr.get(F_FORMAT)).lower(): continue
             n=cnum_job(ptxt(pr.get(F_JOBNAME)))
             if n is not None:
@@ -149,12 +174,13 @@ def records_for(client_id, product, round_name, flow_client):
     out={}
     for n in sorted(paid):
         cs=concepts[n]["cs"]; f=flow.get(n,{}); fs=f.get("status")
-        if fs and fs in FLOW_TO_STAGE: stage=FLOW_TO_STAGE[fs]
-        elif cs in CS_TO_STAGE:        stage=CS_TO_STAGE[cs]
-        elif cs=="Failed":             stage="❌ Failed"
-        else:                          stage="⚪ no status yet"
+        flow_stage=FLOW_TO_STAGE_LC.get(_norm(fs))
+        if flow_stage:           stage=flow_stage                 # Flow always wins once it has a status
+        elif cs in CS_TO_STAGE:  stage=CS_TO_STAGE[cs]
+        elif cs=="Failed":       stage="❌ Failed"
+        else:                    stage="🔒 Locking in creator"    # never leave a concept blank
         out[n]={"name":concepts[n]["name"],"creator_id":concepts[n]["creator_id"],"product":concepts[n]["product"],
-                "stage":stage,"edit":FLOW_TO_EDIT.get(fs,""),"script":f.get("script",""),"review":f.get("review",""),"pid":concepts[n]["pid"]}
+                "stage":stage,"edit":FLOW_TO_EDIT_LC.get(_norm(fs),""),"script":f.get("script",""),"review":f.get("review",""),"pid":concepts[n]["pid"]}
     return out
 
 def set_master_stage(pid, stage):
@@ -193,6 +219,25 @@ def upsert_concept(client_lbl, round_name, n, rec, sku="", brand_id=""):
             try: _patch(f"/pages/{pid}", {"properties":extra})
             except Exception: pass
 
+def upsert_ot(brand, round_name, n, rec):
+    """Mirror a concept into the client's own Operations Tracker: writes Live Status + Creator +
+    Concept #, keeps their existing Status column untouched. Keyed by Round + Concept #."""
+    ot=OT_IDS.get(brand)
+    if not ot: return
+    title=rec["name"] or f"C{n}"
+    props={OT_TITLE:{"title":[{"type":"text","text":{"content":f"C{n} — {title}"}}]},
+        OT_NUM:{"select":{"name":f"Concept {n}"}}, OT_ROUND:{"select":{"name":round_name}}}
+    if not rec["stage"].startswith(("⚪","❌")): props[OT_STAGE]={"select":{"name":rec["stage"]}}
+    cname=creator_name(rec.get("creator_id"))
+    if cname: props[OT_CREATOR]={"rich_text":[{"type":"text","text":{"content":cname}}]}
+    try:
+        found=query_db(ot, {"and":[{"property":OT_ROUND,"select":{"equals":round_name}},
+            {"property":OT_NUM,"select":{"equals":f"Concept {n}"}}]})
+        if found: _patch(f"/pages/{found[0]['id']}", {"properties":props})
+        else:     _post("/pages", {"parent":{"database_id":ot},"properties":props})
+    except Exception as e:
+        print(f"  OT {brand} C{n}: {e}")
+
 def update_tracker(pid, recs, existing):
     lines=["📋 Concept status (auto-synced)"]; exported=0; stages=[]
     for n in sorted(recs):
@@ -226,6 +271,7 @@ def main():
             for n,rec in recs.items():
                 set_master_stage(rec["pid"],rec["stage"])
                 upsert_concept(lbl,round_name,n,rec,sku=rec["product"],brand_id=bid)
+                upsert_ot(brand,round_name,n,rec)
             update_tracker(row["id"],recs,ptxt(pr.get(T_NOTES)))
             print(f"OK  {client} {round_name}: {len(recs)} concepts")
         except Exception as e:
