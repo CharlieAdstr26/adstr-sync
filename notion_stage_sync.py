@@ -33,8 +33,7 @@ C_LINK="🔗 Concept"; C_BRAND="Clients"; C_SINCE="⏱️ Stage Since"
 # Client-facing Operations Trackers. brand -> the client's TOP-LEVEL Operations Tracker database id.
 # The script finds each round's product page, drills into the nested "O.T - Concepts" table, and fills
 # Live Status + Creator on each concept (matched by Concept #). Add one line per client as we roll out.
-OT_PARENT = {"Hyro":"9dd44225-6652-8369-a042-01d015edd3db"}
-OT_P_ROUND="Round "                                              # round select on the parent OT
+OT_PARENT = {"Hyro":"7b744225-6652-8276-ba1d-81f64c999269"}      # the LIVE Operations Tracker (under Adstr Hub)
 OTC_NUM="Concept #"; OTC_STAGE="Live Status"; OTC_CREATOR="Creator"   # cols on the nested O.T - Concepts table
 
 # Known brand -> master Clients page id (overrides; new brands are looked up live)
@@ -249,9 +248,15 @@ def sync_ot_concepts(brand, round_name, product, recs):
     parent=OT_PARENT.get(brand)
     if not parent: return
     try:
-        pages=query_db(parent, {"property":OT_P_ROUND,"select":{"equals":round_name}})
+        allpages=query_db(parent)
     except Exception as e:
         print(f"  OT {brand} {round_name}: parent query {e}"); return
+    def prnd(pg):                                  # round value, tolerant of the column name ("Round"/"Round ")
+        for k in ("Round","Round ","round"):
+            v=ptxt(pg["properties"].get(k))
+            if v: return v
+        return ""
+    pages=[p for p in allpages if prnd(p)==round_name]
     if product:                                    # multi-SKU client: narrow to the matching product page
         narrowed=[p for p in pages if product.lower() in ptxt(p["properties"].get("Product")).lower()]
         if narrowed: pages=narrowed
