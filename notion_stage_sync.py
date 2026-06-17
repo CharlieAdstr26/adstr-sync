@@ -61,12 +61,12 @@ FLOW_TO_STAGE = {"Update Status":"🎞️ In editing","Awaiting Assets":"🚧 Aw
 "Notes given":"✂️ Editing revisions","Revisions":"✂️ Editing revisions","Revisions Amended":"✂️ Editing revisions",
 "Need End Cards":"✂️ Editing revisions","Need 4x5 version":"✂️ Editing revisions","Pending Approval":"✅ Approved internally",
 "4x5s Approved":"✅ Approved internally","Client Review":"✅ Approved internally","Pending Export":"📤 Pending export",
-"Pending Exports":"📤 Pending export","Exported":"🏁 Exported"}
+"Pending Exports":"📤 Pending export","Exported":"🏁 Exported","LIVE":"🏁 Exported"}
 FLOW_TO_EDIT = {"Ready to Edit":"Ready to Edit","Update Status":"Ready to Edit","Awaiting Assets":"Missing clips",
 "In Editing":"In Editing","Internal Review":"In Editing","Ready For Review":"Ready for Review","Notes given":"Revisions",
 "Revisions":"Revisions","Revisions Amended":"Revisions","Need End Cards":"Revisions","Need 4x5 version":"Revisions",
 "Client Review":"Client Review","Pending Approval":"Client Review","4x5s Approved":"Client Review",
-"Pending Export":"Pending Export","Pending Exports":"Pending Export","Exported":"Exported"}
+"Pending Export":"Pending Export","Pending Exports":"Pending Export","Exported":"Exported","LIVE":"Exported"}
 EMOJI = {"🔒 Locking in creator":"🔒","✅ Creator locked in":"✅","📦 Product sent":"📦","🎬 Filming":"🎬",
 "🔄 Creator revisions":"🔄","📁 Files uploaded":"📁","📝 Ready to Edit":"📝","🚧 Awaiting assets":"🚧",
 "🎞️ In editing":"🎞️","✂️ Editing revisions":"✂️","✅ Approved internally":"✅","📤 Pending export":"📤","🏁 Exported":"🏁"}
