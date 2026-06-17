@@ -3,6 +3,8 @@
 Progress Tracker, so new clients/rounds auto-sync with no list to maintain."""
 
 import os, re, sys, time, requests
+from datetime import date
+TODAY = date.today().isoformat()
 
 NOTION_TOKEN = os.environ.get("NOTION_TOKEN")
 HEADERS = {"Authorization": f"Bearer {NOTION_TOKEN}", "Notion-Version": "2022-06-28", "Content-Type": "application/json"}
@@ -26,7 +28,7 @@ T_CLIENT="Client"; T_ROUND="Round "; T_NOTES="📝 Notes"; T_COMPLETION="🏁 Ro
 C_CONCEPT="Concept"; C_CLIENT="Client"; C_ROUND="Round"; C_NUM="Concept #"; C_SKU="SKU"
 C_CREATOR="Creator"; C_STAGE="🎯 Stage"; C_EDIT="✂️ Editing Status"
 C_FORMAT="Format"; C_SCRIPT="Script Link"; C_REVIEW="Review Link"
-C_LINK="🔗 Concept"; C_BRAND="Clients"
+C_LINK="🔗 Concept"; C_BRAND="Clients"; C_SINCE="⏱️ Stage Since"
 
 # Known brand -> master Clients page id (overrides; new brands are looked up live)
 CLIENT_IDS = {
@@ -44,7 +46,7 @@ FLOW_CLIENT_OVERRIDE = {"Whif":"WHIF"}
 CS_TO_STAGE = {"Reached Out [WhatsApp]":"🔒 Locking in creator","Reached Out [Email]":"🔒 Locking in creator",
 "In Talks - Keen":"🔒 Locking in creator","Signing Contract":"🔒 Locking in creator","Agreed":"🔒 Locking in creator",
 "Ordered Product":"📦 Product sent","Filming":"🎬 Filming","REVISIONS":"🔄 Creator revisions",
-"Reviewing":"🎞️ In editing","FLOW":"🎞️ In editing","COMPLETE":"🏁 Exported"}
+"Reviewing":"🎞️ In editing","FLOW":"🎞️ In editing","COMPLETE":"📥 Creator delivered"}
 FLOW_TO_STAGE = {"Update Status":"🎞️ In editing","Awaiting Assets":"🎞️ In editing","Ready to Edit":"🎞️ In editing",
 "In Editing":"🎞️ In editing","Internal Review":"🎞️ In editing","Ready For Review":"🎞️ In editing",
 "Notes given":"✂️ Editing revisions","Revisions":"✂️ Editing revisions","Revisions Amended":"✂️ Editing revisions",
@@ -57,7 +59,8 @@ FLOW_TO_EDIT = {"Ready to Edit":"Ready to Edit","Update Status":"Ready to Edit",
 "Client Review":"Client Review","Pending Approval":"Client Review","4x5s Approved":"Client Review",
 "Pending Export":"Pending Export","Pending Exports":"Pending Export","Exported":"Exported"}
 EMOJI = {"🔒 Locking in creator":"🔒","📦 Product sent":"📦","🎬 Filming":"🎬","🔄 Creator revisions":"🔄",
-"🎞️ In editing":"🎞️","✂️ Editing revisions":"✂️","✅ Approved internally":"✅","📤 Pending export":"📤","🏁 Exported":"🏁"}
+"📥 Creator delivered":"📥","🎞️ In editing":"🎞️","✂️ Editing revisions":"✂️","✅ Approved internally":"✅",
+"📤 Pending export":"📤","🏁 Exported":"🏁"}
 SEP = "———————"
 
 def _post(p,b): r=requests.post(f"{API}{p}",headers=HEADERS,json=b,timeout=30); r.raise_for_status(); return r.json()
@@ -164,7 +167,8 @@ def upsert_concept(client_lbl, round_name, n, rec, sku="", brand_id=""):
     core={C_CONCEPT:{"title":[{"type":"text","text":{"content":f"C{n} — {title}"}}]},
         C_CLIENT:{"select":{"name":client_lbl}},C_ROUND:{"select":{"name":round_name}},
         C_NUM:{"select":{"name":f"Concept {n}"}},C_FORMAT:{"select":{"name":"UGC"}}}
-    if not rec["stage"].startswith(("⚪","❌")): core[C_STAGE]={"select":{"name":rec["stage"]}}
+    new_stage = rec["stage"] if not rec["stage"].startswith(("⚪","❌")) else ""
+    if new_stage: core[C_STAGE]={"select":{"name":new_stage}}
     if rec["edit"]:   core[C_EDIT]={"select":{"name":rec["edit"]}}
     if rec["script"]: core[C_SCRIPT]={"url":rec["script"]}
     if rec["review"]: core[C_REVIEW]={"url":rec["review"]}
@@ -173,6 +177,11 @@ def upsert_concept(client_lbl, round_name, n, rec, sku="", brand_id=""):
         {"property":C_ROUND,"select":{"equals":round_name}},
         {"property":C_NUM,"select":{"equals":f"Concept {n}"}}]})
     match=next((r for r in found if ptxt(r["properties"].get(C_SKU))==sku), None)
+    old_stage = ptxt(match["properties"].get(C_STAGE)) if match else ""
+    has_since = bool(match and (match["properties"].get(C_SINCE) or {}).get("date")) if match else False
+    # stamp "Stage Since" only when the stage actually changes (or first time we see this concept)
+    if new_stage and (not match or new_stage != old_stage or not has_since):
+        core[C_SINCE]={"date":{"start":TODAY}}
     if match: pid=match["id"]; _patch(f"/pages/{pid}", {"properties":core})
     else:     pid=_post("/pages", {"parent":{"database_id":DB_CONCEPT},"properties":core})["id"]
     # extras written one at a time so a single bad value can't break the row
@@ -194,7 +203,7 @@ def update_tracker(pid, recs, existing):
     if total and exported==total: health="✅ Round complete"
     elif any(s in ("🔄 Creator revisions","✂️ Editing revisions") for s in stages): health="🔴 Roadblock"
     elif pct>=60: health="🟢 Nearly there"
-    elif pct>=20 or any(s in ("🎬 Filming","🎞️ In editing","✅ Approved internally","📤 Pending export") for s in stages): health="🟡 In progress"
+    elif pct>=20 or any(s in ("🎬 Filming","📥 Creator delivered","🎞️ In editing","✅ Approved internally","📤 Pending export") for s in stages): health="🟡 In progress"
     else: health="🟠 Just getting started"
     human=existing.split(SEP,1)[1].strip() if SEP in existing else existing.strip()
     notes=("\n".join(lines)+f"\n{SEP}\n"+human)[:1900]
