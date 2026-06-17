@@ -30,9 +30,12 @@ C_CREATOR="Creator"; C_STAGE="🎯 Stage"; C_EDIT="✂️ Editing Status"
 C_FORMAT="Format"; C_SCRIPT="Script Link"; C_REVIEW="Review Link"
 C_LINK="🔗 Concept"; C_BRAND="Clients"; C_SINCE="⏱️ Stage Since"
 
-# Client-facing Operations Trackers — brand -> OT database id. Add a line per client as we roll out.
-OT_IDS = {"Hyro":"43044225-6652-83a1-89e0-81c4d173ad57"}
-OT_TITLE="Product"; OT_ROUND="Round "; OT_NUM="Concept #"; OT_STAGE="Live Status"; OT_CREATOR="Creator"
+# Client-facing Operations Trackers. brand -> the client's TOP-LEVEL Operations Tracker database id.
+# The script finds each round's product page, drills into the nested "O.T - Concepts" table, and fills
+# Live Status + Creator on each concept (matched by Concept #). Add one line per client as we roll out.
+OT_PARENT = {"Hyro":"9dd44225-6652-8369-a042-01d015edd3db"}
+OT_P_ROUND="Round "                                              # round select on the parent OT
+OTC_NUM="Concept #"; OTC_STAGE="Live Status"; OTC_CREATOR="Creator"   # cols on the nested O.T - Concepts table
 
 # Known brand -> master Clients page id (overrides; new brands are looked up live)
 CLIENT_IDS = {
@@ -219,24 +222,57 @@ def upsert_concept(client_lbl, round_name, n, rec, sku="", brand_id=""):
             try: _patch(f"/pages/{pid}", {"properties":extra})
             except Exception: pass
 
-def upsert_ot(brand, round_name, n, rec):
-    """Mirror a concept into the client's own Operations Tracker: writes Live Status + Creator +
-    Concept #, keeps their existing Status column untouched. Keyed by Round + Concept #."""
-    ot=OT_IDS.get(brand)
-    if not ot: return
-    title=rec["name"] or f"C{n}"
-    props={OT_TITLE:{"title":[{"type":"text","text":{"content":f"C{n} — {title}"}}]},
-        OT_NUM:{"select":{"name":f"Concept {n}"}}, OT_ROUND:{"select":{"name":round_name}}}
-    if not rec["stage"].startswith(("⚪","❌")): props[OT_STAGE]={"select":{"name":rec["stage"]}}
-    cname=creator_name(rec.get("creator_id"))
-    if cname: props[OT_CREATOR]={"rich_text":[{"type":"text","text":{"content":cname}}]}
+def find_concepts_db(page_id):
+    """Find the nested 'O.T - Concepts' database inside a product page."""
     try:
-        found=query_db(ot, {"and":[{"property":OT_ROUND,"select":{"equals":round_name}},
-            {"property":OT_NUM,"select":{"equals":f"Concept {n}"}}]})
-        if found: _patch(f"/pages/{found[0]['id']}", {"properties":props})
-        else:     _post("/pages", {"parent":{"database_id":ot},"properties":props})
+        d=_get(f"/blocks/{page_id}/children?page_size=100")
+        for b in d.get("results",[]):
+            if b.get("type")=="child_database" and "concept" in (b["child_database"].get("title") or "").lower():
+                return b["id"]
+    except Exception: pass
+    return None
+
+def ensure_otc_columns(db_id):
+    """Make sure the O.T - Concepts table has Live Status + Creator columns (so new rounds self-setup)."""
+    try:
+        props=_get(f"/databases/{db_id}").get("properties",{})
+        add={}
+        if OTC_STAGE   not in props: add[OTC_STAGE]={"select":{}}
+        if OTC_CREATOR not in props: add[OTC_CREATOR]={"rich_text":{}}
+        if add: _patch(f"/databases/{db_id}", {"properties":add})
     except Exception as e:
-        print(f"  OT {brand} C{n}: {e}")
+        print(f"  OTC cols: {e}")
+
+def sync_ot_concepts(brand, round_name, product, recs):
+    """Fill Live Status + Creator on the client's nested O.T - Concepts table, matched by Concept #.
+    Updates existing concept rows only; never touches their Status/Format/Frame columns."""
+    parent=OT_PARENT.get(brand)
+    if not parent: return
+    try:
+        pages=query_db(parent, {"property":OT_P_ROUND,"select":{"equals":round_name}})
+    except Exception as e:
+        print(f"  OT {brand} {round_name}: parent query {e}"); return
+    if product:                                    # multi-SKU client: narrow to the matching product page
+        narrowed=[p for p in pages if product.lower() in ptxt(p["properties"].get("Product")).lower()]
+        if narrowed: pages=narrowed
+    for pg in pages:
+        db_id=find_concepts_db(pg["id"])
+        if not db_id: continue
+        ensure_otc_columns(db_id)
+        by_num={}
+        for r in query_db(db_id):
+            num=ptxt(r["properties"].get(OTC_NUM))
+            if num: by_num[num]=r["id"]
+        for n,rec in recs.items():
+            rid=by_num.get(f"Concept {n}")
+            if not rid: continue
+            props={}
+            if not rec["stage"].startswith(("⚪","❌")): props[OTC_STAGE]={"select":{"name":rec["stage"]}}
+            cname=creator_name(rec.get("creator_id"))
+            if cname: props[OTC_CREATOR]={"rich_text":[{"type":"text","text":{"content":cname}}]}
+            if props:
+                try: _patch(f"/pages/{rid}", {"properties":props})
+                except Exception as e: print(f"  OTC {brand} C{n}: {e}")
 
 def update_tracker(pid, recs, existing):
     lines=["📋 Concept status (auto-synced)"]; exported=0; stages=[]
@@ -271,7 +307,7 @@ def main():
             for n,rec in recs.items():
                 set_master_stage(rec["pid"],rec["stage"])
                 upsert_concept(lbl,round_name,n,rec,sku=rec["product"],brand_id=bid)
-                upsert_ot(brand,round_name,n,rec)
+            sync_ot_concepts(brand,round_name,product,recs)
             update_tracker(row["id"],recs,ptxt(pr.get(T_NOTES)))
             print(f"OK  {client} {round_name}: {len(recs)} concepts")
         except Exception as e:
