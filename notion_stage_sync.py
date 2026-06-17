@@ -36,6 +36,14 @@ C_LINK="🔗 Concept"; C_BRAND="Clients"; C_SINCE="⏱️ Stage Since"
 OT_PARENT = {                                                    # LIVE Operations Trackers (under Adstr Hub)
     "Hyro":"7b744225-6652-8276-ba1d-81f64c999269",
     "PuraU":"73344225-6652-8368-a44d-818c604234d0",
+    "Tao Clean":"c5344225-6652-830f-bd20-817c335aa6c9",
+    "Whif":"a9044225-6652-833a-82f1-8151068100c2",
+    "Frase Skin":"84c44225-6652-82ef-858f-81f8422a8487",
+    "Nu Harvest":"e5e44225-6652-82be-97d0-811135f8777f",
+    "Healr":"18a44225-6652-83e9-9a4a-01fb8b2c69e5",
+    "SoleBrace":"b8a44225-6652-834d-b5e2-81bcb905dd56",
+    # Ninja omitted on purpose: its hub is a SharkNinja portal (Ninja Kitchen / Shark trackers),
+    # a different structure than the standard O.T - Concepts pattern — needs its own pass.
 }
 OTC_NUM="Concept #"; OTC_STAGE="Live Status"; OTC_CREATOR="Creator"   # cols on the nested O.T - Concepts table
 
